@@ -1,70 +1,145 @@
-"""File system utilities"""
+
+
 import os
+from typing import List, Dict, Tuple, Optional
+from pathlib import Path
 
-DEFAULT_IGNORE_DIRS = [".git", "node_modules", "__pycache__", ".venv", "venv"]
-DEFAULT_IGNORE_EXTS = [".pyc", ".pyo", ".so", ".dll", ".exe", ".jpg", ".png", ".zip"]
 
-def scan_directory(root_path, ignore_dirs=None, ignore_exts=None, max_depth=10):
-    if ignore_dirs is None:
-        ignore_dirs = DEFAULT_IGNORE_DIRS
-    if ignore_exts is None:
-        ignore_exts = DEFAULT_IGNORE_EXTS
+class FileScanner:
+    """Handles file system operations"""
     
-    def _scan(path, depth=0):
-        if depth > max_depth:
-            return None
-        result = {"name": os.path.basename(path), "type": "directory", "children": []}
-        try:
-            items = os.listdir(path)
-        except:
-            return result
+    def __init__(self, ignored_dirs: List[str] = None):
+        self.ignored_dirs = ignored_dirs or [
+            '.git', 'node_modules', 'venv', '.venv', '__pycache__',
+            '.pytest_cache', 'dist', 'build', '.idea', '.vscode'
+        ]
         
-        for item in items:
-            if item.startswith('.') or item in ignore_dirs:
+        self.language_extensions = {
+            'python': ['.py'],
+            'jac': ['.jac'],
+            'javascript': ['.js', '.jsx', '.ts', '.tsx'],
+            'java': ['.java'],
+            'cpp': ['.cpp', '.h', '.hpp']
+        }
+    
+    def should_ignore(self, path: str) -> bool:
+        """Check if path should be ignored"""
+        path_parts = Path(path).parts
+        return any(ignored_dir in path_parts for ignored_dir in self.ignored_dirs)
+    
+    def detect_language(self, filename: str) -> str:
+        """Detect programming language from extension"""
+        ext = os.path.splitext(filename)[1].lower()
+        
+        for language, extensions in self.language_extensions.items():
+            if ext in extensions:
+                return language
+        
+        return 'unknown'
+    
+    def generate_file_tree(self, root_path: str, max_depth: int = 10) -> Dict:
+        """Generate tree structure of repository"""
+        def build_tree(path: str, depth: int = 0) -> Optional[Dict]:
+            if depth > max_depth or self.should_ignore(path):
+                return None
+            
+            name = os.path.basename(path)
+            
+            if os.path.isfile(path):
+                language = self.detect_language(name)
+                return {
+                    'name': name,
+                    'type': 'file',
+                    'path': path,
+                    'language': language,
+                    'size': os.path.getsize(path)
+                }
+            
+            elif os.path.isdir(path):
+                children = []
+                try:
+                    for item in sorted(os.listdir(path)):
+                        item_path = os.path.join(path, item)
+                        child = build_tree(item_path, depth + 1)
+                        if child:
+                            children.append(child)
+                except PermissionError:
+                    pass
+                
+                return {
+                    'name': name,
+                    'type': 'directory',
+                    'path': path,
+                    'children': children
+                }
+            
+            return None
+        
+        return build_tree(root_path)
+    
+    def get_all_files(self, root_path: str, extensions: List[str] = None) -> List[str]:
+        """Get all files in repository"""
+        all_files = []
+        
+        for dirpath, dirnames, filenames in os.walk(root_path):
+            dirnames[:] = [d for d in dirnames if not self.should_ignore(os.path.join(dirpath, d))]
+            
+            for filename in filenames:
+                filepath = os.path.join(dirpath, filename)
+                
+                if extensions:
+                    if any(filename.endswith(ext) for ext in extensions):
+                        all_files.append(filepath)
+                else:
+                    all_files.append(filepath)
+        
+        return all_files
+    
+    def find_readme(self, root_path: str) -> Optional[str]:
+        """Find README file"""
+        readme_patterns = [
+            'README.md', 'readme.md', 'Readme.md',
+            'README.rst', 'README.txt', 'README'
+        ]
+        
+        for pattern in readme_patterns:
+            readme_path = os.path.join(root_path, pattern)
+            if os.path.exists(readme_path):
+                return readme_path
+        
+        return None
+    
+    def read_readme(self, root_path: str) -> Tuple[bool, str]:
+        """Read README file content"""
+        readme_path = self.find_readme(root_path)
+        
+        if not readme_path:
+            return False, "No README file found"
+        
+        try:
+            with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            return True, content
+        except Exception as e:
+            return False, f"Error reading README: {str(e)}"
+    
+    def find_entry_points(self, root_path: str) -> List[str]:
+        """Find likely entry point files"""
+        entry_patterns = [
+            'main.py', 'app.py', '__main__.py', 'run.py',
+            'server.py', 'index.py', 'start.py',
+            'main.jac', 'app.jac', 'server.jac'
+        ]
+        
+        entry_points = []
+        
+        for dirpath, dirnames, filenames in os.walk(root_path):
+            depth = dirpath[len(root_path):].count(os.sep)
+            if depth > 1:
                 continue
-            item_path = os.path.join(path, item)
-            if os.path.islink(item_path):
-                continue
-            if os.path.isdir(item_path):
-                subdir = _scan(item_path, depth + 1)
-                if subdir:
-                    result["children"].append(subdir)
-            else:
-                ext = os.path.splitext(item)[1].lower()
-                if ext not in ignore_exts:
-                    result["children"].append({
-                        "name": item, "type": "file",
-                        "path": item_path, "extension": ext
-                    })
-        return result
-    return _scan(root_path)
-
-def detect_languages(file_tree):
-    lang_map = {
-        ".py": "Python", ".jac": "Jac", ".js": "JavaScript",
-        ".ts": "TypeScript", ".java": "Java", ".go": "Go"
-    }
-    counts = {}
-    def count_files(node):
-        if node.get("type") == "file":
-            ext = node.get("extension", "")
-            lang = lang_map.get(ext, "Other")
-            counts[lang] = counts.get(lang, 0) + 1
-        else:
-            for child in node.get("children", []):
-                count_files(child)
-    count_files(file_tree)
-    return counts
-
-def count_total_files(file_tree):
-    if file_tree.get("type") == "file":
-        return 1
-    return sum(count_total_files(child) for child in file_tree.get("children", []))
-
-def find_readme(directory):
-    candidates = ["README.md", "README.txt", "README", "readme.md"]
-    for candidate in candidates:
-        path = os.path.join(directory, candidate)
-        if os.path.isfile(path):
-            return path
-    return ""
+            
+            for filename in filenames:
+                if filename.lower() in [p.lower() for p in entry_patterns]:
+                    entry_points.append(os.path.join(dirpath, filename))
+        
+        return entry_points
