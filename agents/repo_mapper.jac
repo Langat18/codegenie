@@ -1,81 +1,234 @@
-"""RepoMapper Agent - Clones and maps repositories"""
-import:py from utils.git_operations {clone_repository, validate_github_url};
-import:py from utils.file_scanner {scan_directory, detect_languages, find_readme, count_total_files};
+"""
+RepoMapper Agent
+Clones repository, generates file tree, and summarizes README
+"""
+
+include:jac ../models/nodes;
+include:jac ../models/data_types;
+include:jac ../config;
+
 import:py os;
-import:py time;
+import:py from datetime import, datetime;
 
 walker RepoMapper {
+    """
+    Agent responsible for repository mapping
+    - Clones the repository
+    - Generates file tree structure
+    - Finds and summarizes README
+    - Identifies entry points
+    """
     has repo_url: str;
-    has clone_dir: str = "./temp_repos";
+    has session_id: str;
+    has status: str = "pending";
+    has result: dict = {};
+    has errors: list = [];
+    has local_path: str = "";
     
-    can start with `root entry {
-        print(f"[RepoMapper] Starting analysis of {self.repo_url}");
+    can start_mapping with `root entry {
+        """Start the repository mapping process"""
+        import:py from utils.git_handler, GitHandler;
+        import:py from utils.file_parser, FileParser;
         
-        if not validate_github_url(self.repo_url):
-            print("[RepoMapper] Invalid GitHub URL");
+        logger.info(f"[RepoMapper] Starting mapping for {self.repo_url}");
+        
+        # Step 1: Clone repository
+        git_handler = GitHandler(TEMP_DIR);
+        repo_name = git_handler.extract_repo_name(self.repo_url);
+        
+        success, local_path, error = git_handler.clone_repository(
+            self.repo_url,
+            timeout=CLONE_TIMEOUT_SECONDS
+        );
+        
+        if not success {
+            self.errors.append(f"Failed to clone repository: {error}");
+            self.status = "failed";
             return;
+        }
         
-        repo_name = self.repo_url.rstrip('/').split('/')[-1].replace('.git', '');
-        repo = Repository(url=self.repo_url, name=repo_name);
-        root ++> repo;
-        visit repo;
+        self.local_path = local_path;
+        logger.info(f"✓ Repository cloned to {local_path}");
+        
+        # Check repository size
+        repo_size_mb = git_handler.get_repo_size_mb(local_path);
+        if repo_size_mb > MAX_REPO_SIZE_MB {
+            self.errors.append(f"Repository too large: {repo_size_mb:.2f}MB > {MAX_REPO_SIZE_MB}MB");
+            self.status = "failed";
+            return;
+        }
+        
+        logger.info(f"Repository size: {repo_size_mb:.2f}MB");
+        
+        # Step 2: Generate file tree
+        file_parser = FileParser(IGNORED_DIRS);
+        file_tree = file_parser.generate_file_tree(local_path, max_depth=10);
+        
+        if not file_tree {
+            self.errors.append("Failed to generate file tree");
+            self.status = "failed";
+            return;
+        }
+        
+        logger.info("✓ File tree generated");
+        
+        # Step 3: Get file statistics
+        file_stats = file_parser.get_file_stats(local_path);
+        logger.info(f"Total files: {file_stats['total_files']}, Total lines: {file_stats['total_lines']}");
+        
+        # Step 4: Find and read README
+        success, readme_content = file_parser.read_readme(local_path);
+        readme_summary = "";
+        
+        if success {
+            logger.info("✓ README found");
+            # Summarize README using LLM
+            readme_summary = self.summarize_readme(readme_content);
+        } else {
+            logger.warning("⚠ No README found");
+            readme_summary = "No README file found in repository";
+        }
+        
+        # Step 5: Identify entry points
+        entry_points = file_parser.find_entry_points(local_path);
+        logger.info(f"Entry points found: {len(entry_points)}");
+        
+        # Step 6: Get all source files
+        all_files = [];
+        for ext_list in SUPPORTED_EXTENSIONS.values() {
+            files = file_parser.get_all_files(local_path, ext_list);
+            all_files.extend(files);
+        }
+        
+        logger.info(f"Source files found: {len(all_files)}");
+        
+        # Compile result
+        self.result = {
+            "repo_name": repo_name,
+            "local_path": local_path,
+            "repo_url": self.repo_url,
+            "repo_size_mb": repo_size_mb,
+            "file_tree": file_tree,
+            "file_stats": file_stats,
+            "readme_summary": readme_summary,
+            "entry_points": entry_points,
+            "all_files": all_files,
+            "total_files": len(all_files),
+            "mapped_at": datetime.now().isoformat()
+        };
+        
+        self.status = "completed";
+        logger.info("[RepoMapper] Mapping completed successfully");
     }
     
-    can clone_repository with Repository entry {
-        print(f"[RepoMapper] Cloning {here.name}...");
-        start_time = time.time();
+    can summarize_readme(content: str) -> str {
+        """
+        Summarize README content using LLM
+        """
+        if not content or len(content) < 100 {
+            return "README is too short to summarize";
+        }
+        
+        # Truncate very long READMEs
+        if len(content) > 10000 {
+            content = content[:10000] + "...";
+        }
         
         try {
-            local_path = clone_repository(here.url, self.clone_dir, here.name, timeout=300);
-            here.local_path = local_path;
-            here.status = "cloned";
-            here.clone_time = time.time() - start_time;
-            print(f"[RepoMapper] Cloned in {here.clone_time:.2f}s");
-            
-            file_tree = FileTree(path=local_path);
-            readme = ReadmeSummary();
-            here ++> file_tree;
-            here ++> readme;
-            visit [-->];
+            if LLM_PROVIDER == "openai" {
+                return self.summarize_with_openai(content);
+            } elif LLM_PROVIDER == "gemini" {
+                return self.summarize_with_gemini(content);
+            } else {
+                # Fallback: simple extraction
+                return self.extract_simple_summary(content);
+            }
         } except Exception as e {
-            here.status = "error";
-            here.error_msg = str(e);
-            print(f"[RepoMapper] Error: {e}");
+            logger.error(f"Error summarizing README: {str(e)}");
+            return self.extract_simple_summary(content);
         }
     }
     
-    can build_file_tree with FileTree entry {
-        print(f"[RepoMapper] Building file tree");
-        repo_node = [<--][0];
-        structure = scan_directory(repo_node.local_path);
-        here.structure = structure;
-        here.total_files = count_total_files(structure);
-        here.languages = detect_languages(structure);
-        print(f"[RepoMapper] Found {here.total_files} files");
+    can summarize_with_openai(content: str) -> str {
+        """Summarize using OpenAI"""
+        import:py openai;
+        
+        client = openai.OpenAI(api_key=OPENAI_API_KEY);
+        
+        prompt = f"""Summarize the following README in 3-5 sentences. Focus on:
+1. What the project does
+2. Key features
+3. Main technologies used
+
+README:
+{content}
+
+Summary:""";
+        
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a technical documentation expert."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200,
+            temperature=0.3
+        );
+        
+        return response.choices[0].message.content.strip();
     }
     
-    can summarize_readme with ReadmeSummary entry {
-        print(f"[RepoMapper] Looking for README");
-        repo_node = [<--][0];
-        readme_path = find_readme(repo_node.local_path);
+    can summarize_with_gemini(content: str) -> str {
+        """Summarize using Gemini"""
+        import:py google.generativeai as genai;
         
-        if readme_path:
-            print(f"[RepoMapper] Found README");
-            try {
-                with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    here.content = f.read(5000);
-                here.found = True;
-                here.summary = self.generate_summary(here.content);
-                here.key_points = self.extract_key_points(here.content);
-                print(f"[RepoMapper] README summarized");
-            } except Exception as e {
-                print(f"[RepoMapper] Couldn't read README: {e}");
+        genai.configure(api_key=GEMINI_API_KEY);
+        model = genai.GenerativeModel(LLM_MODEL);
+        
+        prompt = f"""Summarize the following README in 3-5 sentences. Focus on:
+1. What the project does
+2. Key features
+3. Main technologies used
+
+README:
+{content}""";
+        
+        response = model.generate_content(prompt);
+        return response.text.strip();
+    }
+    
+    can extract_simple_summary(content: str) -> str {
+        """
+        Extract simple summary from README without LLM
+        Takes first few paragraphs
+        """
+        lines = content.split('\n');
+        summary_lines = [];
+        
+        for line in lines[:20] {
+            line = line.strip();
+            # Skip markdown headers and empty lines
+            if line and not line.startswith('#') and len(line) > 20 {
+                summary_lines.append(line);
+                if len(summary_lines) >= 3 {
+                    break;
+                }
             }
         }
+        
+        return ' '.join(summary_lines) if summary_lines else "No summary available";
     }
     
-    """Generate README summary."""
-    def generate_summary(content: str) -> str by llm();
-    """Extract key points."""
-    def extract_key_points(content: str) -> list[str] by llm();
+    can get_primary_language(file_stats: dict) -> str {
+        """Determine primary programming language"""
+        languages = file_stats.get('languages', {});
+        
+        if not languages {
+            return 'unknown';
+        }
+        
+        # Find language with most lines of code
+        primary = max(languages.items(), key=lambda x: x[1].get('lines', 0));
+        return primary[0];
+    }
 }

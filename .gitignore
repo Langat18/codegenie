@@ -1,13 +1,44 @@
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+*.pyo
+
+# Virtual Environment
 venv/
 .venv/
-.env
+env/
+ENV/
+virtualenv/
+
+# Project specific
 temp_repos/
 outputs/
 logs/
 *.log
-.DS_Store
-.idea/
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local
+
+# Jac
 *.jac.cache
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build
+dist/
+build/
+*.egg-info/
