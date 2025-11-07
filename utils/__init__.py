@@ -1,17 +1,9 @@
-
 """
-Utils package initialization
-Exports all utility classes
+Utilities package for Codebase Genius
 """
 
-from .git_handler import GitHandler
-from .file_parser import FileParser
-from .tree_sitter_parser import TreeSitterParser
-from .diagram_generator import DiagramGenerator
+from .git_operations import GitHandler
+from .file_scanner import FileScanner
+from .code_parser import CodeParser
 
-__all__ = [
-    'GitHandler',
-    'FileParser',
-    'TreeSitterParser',
-    'DiagramGenerator'
-]
+__all__ = ['GitHandler', 'FileScanner', 'CodeParser']
