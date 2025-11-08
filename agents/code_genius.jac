@@ -1,9 +1,9 @@
-"""
-CodeGenius Supervisor Agent
-"""
+import:jac from repo_mapper, RepoMapper;
+import:jac from code_analyzer, CodeAnalyzer;
+import:jac from doc_genie, DocGenie;
 
 walker CodeGenius {
-    has repo_url: str;
+    has repo_url:str = "";
     
     can orchestrate with entry {
         print("\n" + "="*60);

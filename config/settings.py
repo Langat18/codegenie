@@ -1,9 +1,15 @@
+"""Configuration Settings"""
 import os
 from dotenv import load_dotenv
 from pathlib import Path
 
 # Load environment variables
 load_dotenv()
+
+# Base paths
+BASE_DIR = Path(__file__).parent.parent
+TEMP_DIR = BASE_DIR / "temp"
+OUTPUT_DIR = BASE_DIR / "output"
 
 # Google Gemini Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -14,16 +20,11 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gemini-1.5-pro")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # Path Configuration
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "./outputs"))
-TEMP_DIR = Path(os.getenv("TEMP_DIR", "./temp_repos"))
-LOG_FILE = Path(os.getenv("LOG_FILE", "./logs/codebase_genius.log"))
-
-# Create directories
 OUTPUT_DIR.mkdir(exist_ok=True)
 TEMP_DIR.mkdir(exist_ok=True)
-LOG_FILE.parent.mkdir(exist_ok=True)
 
 # Repository Configuration
 MAX_REPO_SIZE_MB = int(os.getenv("MAX_REPO_SIZE_MB", "500"))
