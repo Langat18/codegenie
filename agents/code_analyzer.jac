@@ -1,24 +1,24 @@
-import:jac from base;
+include base;
 
 walker CodeAnalyzer {
-    has repo_path = "";
-    has session_id = "";
-    has priority_files = [];
-    has status = "pending";
-    has result = {};
-    has errors = [];
-    has ccg = {};
-    has name = "CodeAnalyzer";
-    has description = "Code analysis and pattern detection agent";
+    has repo_path:str = "";
+    has session_id:str = "";
+    has priority_files:list = [];
+    has status:str = "pending";
+    has result:dict = {};
+    has errors:list = [];
+    has ccg:dict = {};
+    has name:str = "CodeAnalyzer";
+    has description:str = "Code analysis and pattern detection agent";
 
-    can process {
-        report("CodeAnalyzer: placeholder analyzing");
-        here.ccg = {
+    can process with entry {
+        print("CodeAnalyzer: placeholder analyzing");
+        self.ccg = {
             "functions": {},
             "classes": {},
             "modules": {},
             "relationships": []
         };
-        here.status = "completed";
+        self.status = "completed";
     }
 }

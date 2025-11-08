@@ -1,13 +1,13 @@
 node CodeFile {
-    has path = "";
-    has content = "";
-    has language = "";
+    has path:str = "";
+    has content:str = "";
+    has language:str = "";
 }
 
 node CodeRepo {
-    has url = "";
-    has name = "";
-    has branch = "";
+    has url:str = "";
+    has name:str = "";
+    has branch:str = "";
 }
 
 glob Nodes = {

@@ -1,25 +1,25 @@
-import:jac from base;
+include base;
 
 walker DocGenie {
-    has repo_url = "";
-    has repo_info = {};
-    has analysis = {};
-    has session_id = "";
-    has status = "pending";
-    has result = {};
-    has errors = [];
-    has markdown_content = "";
-    has final_docs = "";
-    has name = "DocGenie";
-    has description = "Documentation generation agent";
+    has repo_url:str = "";
+    has repo_info:dict = {};
+    has analysis:dict = {};
+    has session_id:str = "";
+    has status:str = "pending";
+    has result:dict = {};
+    has errors:list = [];
+    has markdown_content:str = "";
+    has final_docs:str = "";
+    has name:str = "DocGenie";
+    has description:str = "Documentation generation agent";
 
-    can process {
-        report("DocGenie: placeholder generating docs");
-        here.final_docs = "Generated documentation (placeholder)";
-        here.status = "completed";
+    can process with entry {
+        print("DocGenie: placeholder generating docs");
+        self.final_docs = "Generated documentation (placeholder)";
+        self.status = "completed";
     }
 
-    can get_final_docs {
-        return here.final_docs;
+    can get_final_docs with entry {
+        return self.final_docs;
     }
 }

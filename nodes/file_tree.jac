@@ -1,6 +1,6 @@
 node FileTree {
-    has path = "";
-    has structure = {};
-    has total_files = 0;
-    has languages = {};
+    has path:str = "";
+    has structure:dict = {};
+    has total_files:int = 0;
+    has languages:dict = {};
 }

@@ -1,26 +1,24 @@
+"""Base Agent Definitions"""
+
 node BaseAgent {
-    has name = "agent";
-    has created = 0;
-    
-    can process {
-        report "Processing base agent";
-    }
+    has name: str = "agent";
+    has created: int = 0;
 }
 
-node RepoAgent:BaseAgent {
-    has repo_url = "";
-    has repo_data = {};
+node RepoAgent(BaseAgent) {
+    has repo_url: str = "";
+    has repo_data: dict = {};
 }
 
-node AnalyzerAgent:BaseAgent {
-    has code_data = {};
+node AnalyzerAgent(BaseAgent) {
+    has code_data: dict = {};
 }
 
-node DocAgent:BaseAgent {
-    has docs = "";
+node DocAgent(BaseAgent) {
+    has docs: str = "";
 }
 
 node base_node {
-    has name = "base";
-    has created = 0;
+    has name: str = "base";
+    has created: int = 0;
 }
